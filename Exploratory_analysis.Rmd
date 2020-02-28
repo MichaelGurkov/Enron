@@ -1,0 +1,139 @@
+---
+title: Exploratory Data Analysis
+output: html_document
+---
+
+
+```{r load_package}
+
+library(devtools)
+
+load_all()
+
+library(tidytext)
+
+library(tidyverse)
+
+```
+
+```{r Set_parameters}
+
+parameters_list = list()
+
+parameters_list$top_word_num = 30
+
+parameters_list$top_sentiment_number = 10
+
+```
+
+
+```{r Import_data}
+
+
+files = list.files(paste0("C:\\Users\\Misha\\Documents\\Data\\Enron\\",
+                          "maildir\\skilling-j\\all_documents"),
+                   full.names = TRUE)
+
+emails_list = lapply(files, function(temp_file){
+  
+    temp_text = readtext(temp_file)
+    
+    temp_email = parse.raw.email(temp_text$text)
+  
+  
+})
+
+
+```
+
+
+```{r convert_emails_to_tidy_df}
+
+email_df = lapply(seq_along(emails_list), function(temp_ind){
+  
+  temp_df = tibble(Email_ID = temp_ind,
+                  Text = emails_list[[temp_ind]]$body %>% 
+                    str_split(pattern = "\n") %>% 
+                    unlist) %>% 
+  mutate(Line_Number = row_number()) %>% 
+  select(Email_ID, Line_Number, Text)
+  
+}) %>% 
+  bind_rows()
+
+
+email_tidy_df = email_df %>% 
+  unnest_tokens(Word, Text) %>% 
+  anti_join(stop_words, by = c("Word" = "word")) %>% 
+  filter(!str_detect(Word,"\\d")) %>% 
+  filter(!Word %in% c("cc","corp","email","subject","http", "jeff",
+                      "skilling","jeff.skilling", "aol.com", "pm"))
+
+```
+
+```{r plot_most_common_word}
+
+ggplot(email_tidy_df %>% 
+         count(Word, sort = TRUE) %>% 
+         slice(1:parameters_list$top_word_num),
+       aes(x = reorder(Word,n), y = n)) + 
+  geom_col() + 
+  coord_flip() + 
+  labs(x = "", y = "", title = paste("Top", parameters_list$top_word_num,
+                                     "words in Jeff Skilling's correspondence")) + 
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+    
+
+```
+
+```{r sentiment_analysis}
+
+email_tidy_df_sentiment = email_tidy_df %>% 
+  inner_join(get_sentiments("loughran"), by = c("Word" = "word"))
+
+```
+
+```{r plot_sentiment}
+
+temp = email_tidy_df_sentiment %>% 
+  count(Email_ID, sentiment) %>% 
+  spread(key = sentiment, value = n, fill = 0) %>% 
+  mutate(Net_Sentiment = positive - negative) %>% 
+  select(Email_ID, Net_Sentiment)
+
+ggplot(list(temp %>% 
+              top_n(n = parameters_list$top_sentiment_number),
+            temp %>% 
+              top_n(n = -parameters_list$top_sentiment_number)) %>% 
+         bind_rows(),
+       aes(x = reorder(Email_ID, Net_Sentiment), y = Net_Sentiment)) + 
+  geom_col() + 
+  coord_flip() + 
+  labs(x = "Net sentiment score", y = "Email ID",
+       title = paste0("Top (and bottom) ",
+                      parameters_list$top_sentiment_number,
+                      " emails by sentiment")) + 
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+```
+
+```{r plot_sentiment_contribution}
+
+temp = email_tidy_df_sentiment %>% 
+  count(Word, sentiment, sort = TRUE) %>% 
+  filter(sentiment %in% c("positive","negative"))
+
+ggplot(temp %>% 
+         group_by(sentiment) %>% 
+         top_n(10), aes(x = reorder(Word,n), y = n, fill = sentiment)) + 
+  geom_col() + 
+  coord_flip() + 
+  facet_wrap(~sentiment, scales = "free_y") + 
+  theme_bw() + 
+  theme(legend.position = "none")
+
+
+

@@ -4,7 +4,9 @@
 #'
 #' @import readtext
 #'
-#' @import tidyverse
+#' @import dplyr
+#'
+#' @import stringr
 #'
 #' @param raw_emal string
 #'
@@ -15,7 +17,7 @@ parse.raw.email = function(raw_email){
   breaks = str_locate(raw_email,"\n\n") %>%
     as.data.frame()
 
-  header = str_sub(raw_email, start =  breaks[,1] - 1)
+  header = str_sub(raw_email, end =  breaks[,1] - 1)
 
   body = str_sub(raw_email, start =  breaks[,2] + 1)
 
